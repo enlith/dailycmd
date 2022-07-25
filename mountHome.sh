@@ -22,3 +22,9 @@ if [ -d "$GICHOME_FOLDER" ] ; then
 fi
 
 ## }add below lines to .profile file
+
+
+# mount gic home on macos
+GICHOME_FOLDER="$HOME"/gichome
+sudo mkdir -p $GICHOME_FOLDER
+mount_smbfs //$USER@seroisfile.sero.gic.ericsson.se/home/$USER $GICHOME_FOLDER
