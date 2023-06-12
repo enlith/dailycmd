@@ -42,7 +42,7 @@ while true; do
     devicecurTimestamp=$(expr $currentTimestamp - 21600)
     # read local time from network
     current_date=$(date -d @$currentTimestamp +"%Y-%m-%d")
-    output_folder="${output_directory}/${current_date}"
+    output_folder="${output_directory}/archieve/${current_date}"
     mkdir -p "$output_folder"
     output_file="${output_folder}/output_$(date -d @$currentTimestamp +"${timestamp_format}").mp4"
     log_file="${output_folder}/ffmpeg_panic.log"
@@ -95,7 +95,7 @@ while true; do
 
     # Delete old folders
     current_time=$(date +%s)
-    for folder in "$output_directory"/*; do
+    for folder in "$output_directory/archieve"/*; do
         if [ -d "$folder" ]; then
             folder_timestamp=$(date -r "$folder" +%s)
             if [ "$((current_time - folder_timestamp))" -gt "$((keep_days * 24 * 60 * 60))" ]; then
