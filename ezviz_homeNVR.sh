@@ -40,6 +40,10 @@ while true; do
     log_file="${output_folder}/ffmpeg_panic.log"
     nohup "$ffmpeg_binary" -loglevel panic -fflags +genpts -i "$stream_url" -c:v copy -c:a copy -t "$segment_duration" "$output_file" >> "$log_file"
 
+
+    #fetch alarm list from api server
+    alarms=$(curl -k -s -X POST -H "Content-Type: application/x-www-form-urlencoded" -d "accessToken=$ACCESS_TOKEN&deviceSerial=$DEVICE_SERIAL&startTime=$start_time&endTime=$end_time&alarmType=$alarm_type&status=$status&pageStart=$page_start&pageSize=$page_size" "https://open.ys7.com/api/lapp/alarm/list" | awk -f parse_alarm.awk)
+
     # Delete old folders
     current_time=$(date +%s)
     for folder in "$output_directory"/*; do
