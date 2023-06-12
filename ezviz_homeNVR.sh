@@ -1,4 +1,3 @@
-#!/data/data/berserker.android.apps.sshdroid/home/.bin/sh
 # This script records an RTSP stream in segments and deletes old recordings.
 # To stop the script before the next loop iteration, send the SIGUSR1 signal to the script's process ID (PID) using one of the following commands:
 # kill -10 PID
@@ -12,6 +11,9 @@
 # export USER="your_username"
 # export SECRET_CODE="your_secret_code"
 # export CAMERA_IP="your_camera_ip"
+# export APPKEY="app_key"
+# export APPSECRET="app_secret"
+# export DEVICE_SERIAL="your_device_id"
 
 source ./camera_secret.sh
 stream_url="rtsp://$USER:$SECRET_CODE@$CAMERA_IP:554"
@@ -32,17 +34,64 @@ handle_signal() {
 trap handle_signal SIGUSR1
 
 while true; do
-    currentTimestamp=$(date +"%s%3N")
+    # use real time from network to avoid wrong localtime problem
+    currentTimestamp=$(echo -n $(curl -s \
+        http://worldtimeapi.org/api/timezone/Etc/UTC.txt \
+        | awk -F: '/^unixtime/ {print $2}'))
+    # use workaround , since it looks having 6 hours shift(21600s) in timestamp presenting
+    devicecurTimestamp=$(expr $currentTimestamp - 21600)
+    # read local time from network
     current_date=$(date -d @$currentTimestamp +"%Y-%m-%d")
     output_folder="${output_directory}/${current_date}"
     mkdir -p "$output_folder"
     output_file="${output_folder}/output_$(date -d @$currentTimestamp +"${timestamp_format}").mp4"
     log_file="${output_folder}/ffmpeg_panic.log"
+    #"$ffmpeg_binary" -fflags +genpts -i "$stream_url" -c:v copy -c:a copy -t "$segment_duration" "$output_file" >> "$log_file"
     nohup "$ffmpeg_binary" -loglevel panic -fflags +genpts -i "$stream_url" -c:v copy -c:a copy -t "$segment_duration" "$output_file" >> "$log_file"
 
 
     #fetch alarm list from api server
-    alarms=$(curl -k -s -X POST -H "Content-Type: application/x-www-form-urlencoded" -d "accessToken=$ACCESS_TOKEN&deviceSerial=$DEVICE_SERIAL&startTime=$start_time&endTime=$end_time&alarmType=$alarm_type&status=$status&pageStart=$page_start&pageSize=$page_size" "https://open.ys7.com/api/lapp/alarm/list" | awk -f parse_alarm.awk)
+    #busybox does not support milliseconds format
+    start_time=$(echo $devicecurTimestamp| awk '{printf "%s000\n", $0}')
+    dev_s_time=$devicecurTimestamp
+    end_time=""
+    alarm_type=-1
+    status=2
+    page_start=0
+    page_size=10
+    alarms=$(curl -k -s -X POST -H "Content-Type: application/x-www-form-urlencoded" -d \
+      "accessToken=$ACCESS_TOKEN&deviceSerial=$DEVICE_SERIAL&startTime=$dev_s_time&endTime=$end_time&alarmType=$alarm_type&status=$status&pageStart=$page_start&pageSize=$page_size" "https://open.ys7.com/api/lapp/alarm/list" \
+      | awk -f parse_alarm.awk)
+
+    # Loop over each line of the output
+    alarm_triggered=false
+    alarm_folder="${output_directory}/alarm/${current_date}"
+    while IFS= read -r line; do
+    # Extract the values of Alarm_Time and Alarm_Pic_URL from the line using awk or other string manipulation
+      Alarm_Time=$(echo -n "$line" | awk -F ' - ' '{print $1}' | cut -d ' ' -f 2)
+      Alarm_Pic_URL=$(echo -n "$line" | awk -F ' - ' '{print $2}' | cut -d ' ' -f 2)
+
+      # check if there is alarm triggered during recording period
+      if (( Alarm_Time > start_time )); then
+          echo "Alarm Time: $Alarm_Time" >> "$log_file"
+          echo "Alarm Pic URL: $Alarm_Pic_URL" >> "$log_file"
+          mkdir -p "$alarm_folder"
+          # add 28800 seconds/8 hours as workaround, to be investigated
+          filename=$(date -d @$(expr $Alarm_Time / 1000 + 28800) +"%Y-%m-%d_%H-%M-%S")
+          # Alarm(s) in recording period, save picture(s)
+          echo "save pic ${alarm_folder}/${filename}.jpg" >> "$log_file"
+          curl -k -s "$Alarm_Pic_URL" -o "${alarm_folder}/${filename}.jpg"
+          alarm_triggered=true
+      fi
+    done <<< "$alarms"
+
+    # alarm triggered, save record video file
+    if "$alarm_triggered"; then
+        keep_file="${alarm_folder}/output_$(date -d @$currentTimestamp +"${timestamp_format}").mp4"
+        echo "rename video $output_file to $keep_file" >> "$log_file"
+        mv "$output_file" "$keep_file"
+    fi
+
 
     # Delete old folders
     current_time=$(date +%s)
