@@ -20,8 +20,10 @@ stream_url="rtsp://$USER:$SECRET_CODE@$CAMERA_IP:554"
 segment_duration=300
 output_directory="/storage/external_storage/sda2/homeNVR"
 timestamp_format="%Y-%m-%d_%H-%M-%S"
-keep_days=1
+keep_days=7
 ffmpeg_binary="/data/data/com.ma7moud3ly.ffmpegdroid/ffmpeg"
+#use worldtiemapi since local time might not accurate in old box
+local_nw_time_source="http://worldtimeapi.org/api/timezone/Europe/Stockholm.txt"
 
 
 # Function to handle the SIGUSR1 signal
@@ -40,11 +42,17 @@ while true; do
         | awk -F: '/^unixtime/ {print $2}'))
     # use workaround , since it looks having 6 hours shift(21600s) in timestamp presenting
     devicecurTimestamp=$(expr $currentTimestamp - 21600)
-    # read local time from network
-    current_date=$(date -d @$currentTimestamp +"%Y-%m-%d")
+    # read local time from network, stockholm timezone
+    current_date=$(curl -s $local_nw_time_source |\
+      sed -n 's/^datetime: \(.*\)/\1/p' | awk -F'[-:T]' '{ printf "%s-%02d-%02d\n", $1, $2, $3 }')
+    #current_date=$(date -d @$currentTimestamp +"%Y-%m-%d")
     output_folder="${output_directory}/archieve/${current_date}"
     mkdir -p "$output_folder"
-    output_file="${output_folder}/output_$(date -d @$currentTimestamp +"${timestamp_format}").mp4"
+    # read local time from network, stockholm timezone
+    stockholm_time=$(curl -s $local_nw_time_source |\
+      sed -n 's/^datetime: \(.*\)/\1/p' |\
+      awk -F'[-:T]' '{ printf "%s-%02d-%02d_%02d-%02d-%02d\n", $1, $2, $3, $4, $5, int($6) }')
+    output_file="${output_folder}/output_${stockholm_time}.mp4"
     log_file="${output_folder}/ffmpeg_panic.log"
     #"$ffmpeg_binary" -fflags +genpts -i "$stream_url" -c:v copy -c:a copy -t "$segment_duration" "$output_file" >> "$log_file"
     nohup "$ffmpeg_binary" -loglevel panic -fflags +genpts -i "$stream_url" -c:v copy -c:a copy -t "$segment_duration" "$output_file" >> "$log_file"
@@ -87,7 +95,7 @@ while true; do
 
     # alarm triggered, save record video file
     if "$alarm_triggered"; then
-        keep_file="${alarm_folder}/output_$(date -d @$currentTimestamp +"${timestamp_format}").mp4"
+        keep_file="${alarm_folder}/output_${stockholm_time}.mp4"
         echo "rename video $output_file to $keep_file" >> "$log_file"
         mv "$output_file" "$keep_file"
     fi
