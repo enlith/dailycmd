@@ -7,8 +7,14 @@
 
 #read -s -p "Enter the RTSP stream password: " password
 #echo
+#
+#The content of camera_secret.sh should looks like:
+# export USER="your_username"
+# export SECRET_CODE="your_secret_code"
+# export CAMERA_IP="your_camera_ip"
 
-stream_url="rtsp://<user>:<secretcode>@<cameraip>:554"
+source ./camera_secret.sh
+stream_url="rtsp://$USER:$SECRET_CODE@$CAMERA_IP:554"
 segment_duration=300
 output_directory="/storage/external_storage/sda2/homeNVR"
 timestamp_format="%Y-%m-%d_%H-%M-%S"
@@ -26,7 +32,7 @@ handle_signal() {
 trap handle_signal SIGUSR1
 
 while true; do
-    currentTimestamp=$(date +%s)
+    currentTimestamp=$(date +"%s%3N")
     current_date=$(date -d @$currentTimestamp +"%Y-%m-%d")
     output_folder="${output_directory}/${current_date}"
     mkdir -p "$output_folder"
