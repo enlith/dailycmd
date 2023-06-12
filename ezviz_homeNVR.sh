@@ -26,10 +26,11 @@ handle_signal() {
 trap handle_signal SIGUSR1
 
 while true; do
-    current_date=$(date +"%Y-%m-%d")
+    currentTimestamp=$(date +%s)
+    current_date=$(date -d @$currentTimestamp +"%Y-%m-%d")
     output_folder="${output_directory}/${current_date}"
     mkdir -p "$output_folder"
-    output_file="${output_folder}/output_$(date +"${timestamp_format}").mp4"
+    output_file="${output_folder}/output_$(date -d @$currentTimestamp +"${timestamp_format}").mp4"
     log_file="${output_folder}/ffmpeg_panic.log"
     nohup "$ffmpeg_binary" -loglevel panic -fflags +genpts -i "$stream_url" -c:v copy -c:a copy -t "$segment_duration" "$output_file" >> "$log_file"
 
