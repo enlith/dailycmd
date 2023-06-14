@@ -14,8 +14,9 @@
 # export APPKEY="app_key"
 # export APPSECRET="app_secret"
 # export DEVICE_SERIAL="your_device_id"
-
+# cache expiration time on file expiration.txt, and set to expiration_time
 source ./camera_secret.sh
+
 stream_url="rtsp://$USER:$SECRET_CODE@$CAMERA_IP:554"
 segment_duration=300
 output_directory="/storage/external_storage/sda2/homeNVR"
@@ -36,6 +37,12 @@ handle_signal() {
 trap handle_signal SIGUSR1
 
 while true; do
+    # Check if the access token is expired
+    if [[ -f "expiration.txt" ]] && [[ $expiration_time -lt $(cat "expiration.txt") ]]; then
+    then
+        source ./camera_secret.sh
+    fi     
+
     # use real time from network to avoid wrong localtime problem
     currentTimestamp=$(echo -n $(curl -s \
         http://worldtimeapi.org/api/timezone/Etc/UTC.txt \
@@ -80,7 +87,7 @@ while true; do
       Alarm_Pic_URL=$(echo -n "$line" | awk -F ' - ' '{print $2}' | cut -d ' ' -f 2)
 
       # check if there is alarm triggered during recording period
-      if (( Alarm_Time > start_time )); then
+      if [[ -n "$Alarm_Time" ]] && (( Alarm_Time > start_time )); then
           echo "Alarm Time: $Alarm_Time" >> "$log_file"
           echo "Alarm Pic URL: $Alarm_Pic_URL" >> "$log_file"
           mkdir -p "$alarm_folder"
