@@ -1,0 +1,39 @@
+#!/data/data/berserker.android.apps.sshdroid/home/.bin/bash
+# A script to update the No-IP DNS record with the current IP address every 4 hours
+#nohup ./updateddnsrecord.sh > updatedns.log &
+
+
+# Set the username and password for No-IP authentication
+USERNAME="<username>"
+PASSWORD="<password>"
+
+# Set the hostname to update
+HOSTNAME="<yoursubdomain>.ddns.net"
+
+# Set the URL for the No-IP API
+URL="http://dynupdate.no-ip.com/nic/update"
+
+# Set the interval in seconds (4 hours = 14400 seconds)
+INTERVAL=14400
+
+
+# Agent
+AGENT="MyScript/1.0 yourmail@gmail.com"
+
+# Loop indefinitely
+while true; do
+  # Get old IP address from DNS record
+  DNSIP=$(nslookup $HOSTNAME | awk '/^Address 1: [1-9]/ { print $3 }')
+
+  # Get the current IP address using curl and ifconfig.co
+  IP=$(curl -4s ifconfig.co)
+
+  if [ "$DNSIP" != "$IP" ]; then
+  # Update the DNS record using curl and basic authentication
+    echo "IP has been changed, $DNSIP => $IP"
+    curl -s -A "$AGENT" -u "$USERNAME:$PASSWORD" "$URL?hostname=$HOSTNAME&myip=$IP"
+  fi
+
+  # Wait for the interval before repeating
+  sleep $INTERVAL
+done
